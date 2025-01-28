@@ -39,4 +39,3 @@ c(
   purrr::walk(
     \(pkg) renv::install(pkg, prompt = FALSE, lock = TRUE, dependencies = TRUE)
   )
-
