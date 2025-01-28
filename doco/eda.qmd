@@ -1,0 +1,44 @@
+---
+title: "Quick EDA"
+author: "Alexander Senetcky"
+format: html
+---
+
+## Small Slice of Data
+
+Start off by grabbing small chunks of the data
+
+```{r setup}
+library(RSocrata)
+library(dplyr)
+```
+
+```{r data}
+## credential types based on credential code
+credential_types <- 
+  RSocrata::read.socrata("https://data.ct.gov/resource/rykc-pttg.json")
+
+## 
+licenced_facilities <- 
+  RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=100")
+
+```
+
+### Taking a Peek
+
+```{r}
+dplyr::glimpse(credential_types)
+dplyr::glimpse(licenced_facilities)
+
+```
+
+Let's try and grab license data that is from 2024 onward.
+
+```{r}
+###| eval: false
+###| include: false
+newish_licensed_facilities <- 
+   RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$where=expirationdate >= '2025-01-28'")
+```
+
+holy cow this is taking forever.
