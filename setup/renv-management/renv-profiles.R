@@ -13,7 +13,7 @@ renv::activate(profile = "development")
 options(renv.config.pak.enabled = TRUE)
 
 ### purrr first then walk the rest
-renv::install("purrr")
+renv::install("purrr", prompt = FALSE, lock = TRUE, dependencies = TRUE)
 
 c(
   "dplyr",
@@ -22,7 +22,7 @@ c(
   "vetiver",
   "plumber",
   "RSocrata",
-  "duckdb",
+  # "duckdb",
   "nanoparquet",
   "httr2",
   "devtools",
@@ -30,10 +30,13 @@ c(
   "DBI",
   "odbc",
   "dbplyr",
-  "fs"
+  "fs",
+  "tidygeocoder",
+  "sf",
+  "leaflet",
+  "mapview"
 ) |>
   purrr::walk(
-    \(pkg) renv::install(pkg, prompt = FALSE)
+    \(pkg) renv::install(pkg, prompt = FALSE, lock = TRUE, dependencies = TRUE)
   )
 
-renv::snapshot()
