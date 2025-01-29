@@ -11,6 +11,8 @@ Start off by grabbing small chunks of the data
 ```{r setup}
 library(RSocrata)
 library(dplyr)
+library(stringr)
+library(glue)
 ```
 
 ```{r data}
@@ -32,13 +34,70 @@ dplyr::glimpse(licenced_facilities)
 
 ```
 
+```{r}
+credential_types |> 
+  mutate(across(everything(), str_to_lower)) |> 
+  filter(credential %in% c("hospice", "home health care"))
+```
+
+
+It looks like Hospice is "HSPC" and "HHC"
 Let's try and grab license data that is from 2024 onward.
 
 ```{r}
-###| eval: false
-###| include: false
-newish_licensed_facilities <- 
-   RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$where=expirationdate >= '2025-01-28'")
+resource_url <- "https://data.ct.gov/resource/ngch-56tr.json"
+where_clause <- 
+  "?$where=expirationdate >= '2025-01-28' "
+where_and <- "and credentialtype in('HHC', 'HSPC')"
+
+target_data <- 
+  RSocrata::read.socrata(url = glue::glue(resource_url, where_clause, where_and)) |> 
+  dplyr::as_tibble()
+
 ```
 
-holy cow this is taking forever.
+Looks like we nabbed some rows. LEt's see what we got.
+
+```{r}
+glimpse(target_data)
+```
+
+There's no metadata attached to any of the columns but I'm starting to get
+a better grasp of the data looking at more current data. `status`, 
+`statusreason`, and `active` look like other variables I can leverage to find
+all the rows I'm looking for more easily.
+
+
+lets try filtering on the active and facility types.
+
+```{r}
+
+new_where_clause <- "?$where=active = 1 " 
+new_target_data <- 
+  RSocrata::read.socrata(
+    glue::glue(resource_url, new_where_clause, where_and)
+  ) |> 
+  dplyr::as_tibble()
+
+glimpse(new_target_data)
+  
+```
+
+looks to be some differences...
+
+```{r}
+
+target_data |> count(active)
+
+target_data |> 
+  filter(active == "0")
+```
+
+We likely only need the active then.
+
+Let's tidy these data up.
+
+```{r}
+
+```
+
