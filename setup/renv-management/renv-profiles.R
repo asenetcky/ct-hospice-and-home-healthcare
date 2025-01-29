@@ -38,7 +38,8 @@ c(
   "stringr",
   "tigris",
   "glue",
-  "lubridate"
+  "lubridate",
+  "gt"
 ) |>
   purrr::walk(
     \(pkg) renv::install(pkg, dependencies = TRUE)

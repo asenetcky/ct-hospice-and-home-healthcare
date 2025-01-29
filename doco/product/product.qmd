@@ -1,0 +1,344 @@
+---
+title: "CT Active Licensed Hospice and Home Healthcare Facilitites"
+author: 
+  - name: Alexander Senetcky
+    id: as
+    orcid: 0009-0009-3730-5397
+    email: alexander.senetcky@ct.gov
+    affiliation:
+      - name: Connecticut Department of Public Health
+        city: Hartford
+        state: CT
+        url: https://portal.ct.gov/dph
+format: 
+  html:
+    code-fold: true
+    embed-resources: true
+    toc: true
+    toc-location: left
+    other-links:
+      - text: Connecticut Open Data Portal
+        href: https://data.ct.gov/
+      - text: State Licenses and Credentials
+        href: https://data.ct.gov/Business/State-Licenses-and-Credentials/ngch-56tr/about_data
+      - text: Facility Credential Types
+        href: https://data.ct.gov/Business/Credential-Types/rykc-pttg/about_data
+      - text: Census Geocoder
+        href: https://geocoding.geo.census.gov/geocoder/
+      - text: Census TIGER/Line Shapefiles
+        href: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
+date: "2025-01-29"
+---
+
+## Project Overview
+
+The goal of this project was to map Home Health Care and Hospice Licensed
+facilities in Connecticut using open data from the 
+[Connecticut Open Data Portal](https://data.ct.gov/) (ODP).
+
+The State License and Credential dataset is large, unordered and updated daily.
+The ODP API backend was used to pull down all active Home Health Care and
+Hospice facilities and ignore the other million or so rows. There appear to be
+93 facilities in the lastest parts of the data, with 90 being "Active" or
+"Active in renewal".  Of those active 90, only 2 were credentialed as hospice
+facilities.
+
+In the short amount of time given I was able to grab the addresses from these 90
+facilities and use the Census geocoder API to get the longitutude and latitude
+of each facility. 87 of these facilities were able to be geocoded and
+unfortunately one of those was a hospice facility. I am confident that in an
+intentional production environment we could get 100% of those geocoded.
+
+There may also be some facilities licensed as Home Health Care that also
+serve as a hospice.
+
+For a list of active and inactive facilities, please see @fig-facility-table.
+
+Please reference @fig-facility-map to see the geocoded results displayed on
+a map.
+
+
+
+```{r}
+#| label: "setup"
+#| include: false
+
+# Libraries
+library(dplyr)
+library(lubridate)
+library(tigris)
+library(RSocrata)
+library(stringr)
+library(glue)
+library(tigris)
+library(mapview)
+library(tidygeocoder)
+library(sf)
+library(DT)
+library(readr)
+library(fs)
+
+#options
+options(tigris_use_cache = TRUE)
+
+```
+
+## The Process
+
+### API Data Request
+
+First the data is pulled from the API on the ODP.  Only facilities
+that are credentialed as "HSSPC" and "HHC" are included. To get at
+anything that isn't too old but may not be active, the `expirationdate` 
+variable is used and any facility that hasn't expired as of 2025-01-28
+is included. 
+
+::: {.callout-note}
+Note that these is *no* metadata about the contents of the credential data
+provided. So the use of `expirationdate` was a best guess.  If a wider net
+needs to be cast, other combinations of variables and values can be 
+used.
+:::
+
+```{r}
+#| label: "grab-data"
+
+# splitting this out in case iteration is needed
+domain <- "https://data.ct.gov/"
+resource <- "resource/ngch-56tr.json"
+where_clause <- "?$where="
+expiration_clause <- "expirationdate >= '2025-01-28'"
+active_clause <- "active = 1"
+credential_type_clause <- "credentialtype in('HHC', 'HSPC')"
+
+# grab all facilities that haven't expired as of 2025-01-28
+include_non_active_statement <- glue(
+  "{domain}{resource}{where_clause}{expiration_clause} and {credential_type_clause}"
+)
+
+# grab all active facilities
+only_active_statement <-  glue(
+  "{domain}{resource}{where_clause}{active_clause} and {credential_type_clause}"
+)
+
+include_non_active <- 
+  RSocrata::read.socrata(url = include_non_active_statement) |> 
+  as_tibble()
+
+only_active <- 
+  RSocrata::read.socrata(only_active_statement) |> 
+  as_tibble()
+```
+
+The raw data look like this:
+
+```{r}
+glimpse(include_non_active)
+```
+
+
+### Clean and Geocode
+
+Next up the data are cleaned and the relevant elements are kept.
+
+```{r}
+#| label: clean-data
+
+# At the time of writing the two datasets are the same - minus the 3 non-active
+# facilities, so let's use that as our data layer
+
+facilities <- 
+  include_non_active |> 
+  select(
+    name,
+    type,
+    fullcredentialcode,
+    credentialnumber,
+    credential,
+    status,
+    issuedate,
+    effectivedate,
+    expirationdate,
+    address,
+    city,
+    state,
+    zip,
+    recordrefreshedon
+  ) |>
+  mutate(
+    across(
+      where(lubridate::is.timepoint),
+      lubridate::as_date
+    ),
+    zip = str_sub(zip, end = -5L),
+    across(
+      c(name, type, status), str_to_title
+    ),
+    zip = if_else(zip == 0, NA_character_, zip),
+    full_address = glue(
+      "{address}, {city}, {state}"
+    ),
+    full_address = if_else(
+      !is.na(zip),
+      glue("{full_address} {zip}"),
+      full_address
+    )
+  ) |>
+  select(
+    -c(
+      address,
+      city,
+      state,
+      zip
+    )
+  ) |> 
+  dplyr::relocate(
+    full_address,
+    .after = expirationdate
+  ) |> 
+  dplyr::relocate(
+    recordrefreshedon,
+    .after = last_col()
+  ) |> 
+  arrange(status, credential, name)
+
+# write out as .csv
+# write_csv(
+#   facilities,
+#   file = fs::path_wd("data/hospice_hhc_facility_list.csv")
+#   na = ""
+# )
+
+```
+
+Then these data are run through the [Census Geocoder](https://geocoding.geo.census.gov/geocoder/).
+
+```{r}
+#| label: geocode-data
+#| message: false
+
+# geocode with census geocoder
+# then drop rows not geocoded
+geocoded_facilities <- 
+  facilities |> 
+  filter(status != "Closed") |> 
+  tidygeocoder::geocode(
+     address = full_address, method = "census"
+  ) |> 
+  filter(!is.na(long))
+
+# convert to sf
+geocoded_facilities <- 
+  sf::st_as_sf(
+    geocoded_facilities,
+    coords = c("long", "lat"),
+    crs = "NAD83"
+  )
+```
+
+Shapefiles will also be needed as well. County Subdivision Shapefiles for
+Connecticut will be grabbed from the
+[Census TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html).
+
+```{r}
+#| label: shapefiles-town
+#| message: false
+#| warning: false
+
+town_shapefile <- 
+  tigris::county_subdivisions(
+    state = "09",
+    cb = TRUE,
+    year = 2022,
+    progress_bar = FALSE
+  )
+
+```
+
+
+## Table
+
+Below is table meant for a quick reference to the data.  Please 
+see the provided .csv file for deeper analysis: `hospice_hhc_Facility_list.csv`
+
+### Facility Info
+
+```{r}
+#| label: fig-facility-table
+
+facilities |> 
+  mutate(
+    status = factor(status),
+    credential = factor(credential),
+    full_address = str_to_lower(full_address)
+  ) |> 
+  select(
+    -c(
+      type, 
+      fullcredentialcode, 
+      credentialnumber, 
+      effectivedate,
+      recordrefreshedon
+    )
+  ) |> 
+  DT::datatable(
+    filter = "top",
+    rownames = FALSE,
+    colnames = c(
+      "Name",
+      "Credential Type",
+      "Status",
+      "Issue Date",
+      "Expiration Date",
+      "Address"
+    ),
+    options = list(
+      pageLength = 5,
+      autoWidth = TRUE
+    )
+  )
+```
+
+
+## Map
+
+### Active Connecticut Home Healthcare and Hospice Facilities
+
+```{r}
+#| label: fig-facility-map
+
+map_data <- 
+  geocoded_facilities |> 
+     select(
+      name,
+      type,
+      credential,
+      credentialnumber,
+      full_address,
+      status,
+      issuedate:expirationdate,
+      geometry
+    ) 
+
+mapview::mapview(
+  town_shapefile,
+  layer.name = "Town",
+  alpha = 0.9,
+  alpha.regions = 0.15,
+  col.regions = "#3371E7",
+  label = "NAME"
+  #zcol = "NAME",
+  #legend = TRUE,
+  #burst = TRUE
+) +
+mapview::mapview(
+  map_data,
+  layer.name = "Facilities",
+  # ycol = "lat",
+  # xcol = "long",
+  label = "name",
+  zcol = "credential"
+) 
+  
+```
+

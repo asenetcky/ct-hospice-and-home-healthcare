@@ -227,7 +227,7 @@ map_facilities <-
   sf::st_as_sf(
     map_facilities,
     coords = c("long", "lat"),
-    crs = "epsg:4326"
+    crs = "epsg:4326" #NAD83
   )
 
 
