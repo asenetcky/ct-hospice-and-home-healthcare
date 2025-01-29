@@ -313,12 +313,25 @@ map_data <-
       name,
       type,
       credential,
-      credentialnumber,
+      fullcredentialcode,
       full_address,
       status,
-      issuedate:expirationdate,
+      issuedate,
+      effectivedate,
+      expirationdate,
       geometry
-    ) 
+    ) |> 
+  rename(
+    Name = name,
+    `Business Type` = type,
+    `Credential Type` = credential,
+    Credential = fullcredentialcode,
+    Address = full_address,
+    Status = status,
+    `Issue Date` = issuedate,
+    `Effective Date` = effectivedate,
+    `Expiration Date` = expirationdate
+  )
 
 mapview::mapview(
   town_shapefile,
@@ -336,8 +349,8 @@ mapview::mapview(
   layer.name = "Facilities",
   # ycol = "lat",
   # xcol = "long",
-  label = "name",
-  zcol = "credential"
+  label = "Name",
+  zcol = "Credential Type"
 ) 
   
 ```
