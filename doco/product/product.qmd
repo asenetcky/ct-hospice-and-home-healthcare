@@ -1,0 +1,50 @@
+---
+title: "CT Active Licensed Hospice and Home Healthcare Facilitites"
+author: 
+  - name: Alexander Senetcky
+    id: as
+    orcid: 0009-0009-3730-5397
+    email: alexander.senetcky@ct.gov
+    affiliation:
+      - name: Connecticut Department of Public Health
+        city: Hartford
+        state: CT
+        url: https://portal.ct.gov/dph
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    toc-location: left
+    other-links:
+      - text: Connecticut Open Data Portal
+        href: https://data.ct.gov/
+      - text: State Licenses and Credentials
+        href: https://data.ct.gov/Business/State-Licenses-and-Credentials/ngch-56tr/about_data
+      - text: Facility Credential Types
+        href: https://data.ct.gov/Business/Credential-Types/rykc-pttg/about_data
+date: "2025-01-29"
+---
+
+## Project Overview
+
+The goal of this project was to map Home Health Care and Hospice Licensed
+facilities in Connecticut using open data from the 
+[Connecticut Open Data Portal](https://data.ct.gov/) (ODP).
+
+The State License and Credential dataset is large, unordered and updated daily.
+The ODP API backend was used to pull down all active Home Health Care and
+Hospice facilities and ignore the other million or so rows. There appear to be
+93 faciliities in the lastest parts of the data, with 90 being "Active" or
+"Active in renewal".  Of those active 90, only 2 were credentialed as hospice
+facilities.
+
+In the short amount of time given I was able to grab the addresses from these 90
+facilities and use the Census geocoder API to get the longitutude and latitude
+of each facility. 87 of these facilities were able to be geocoded and
+unfortunately one of those was a hospice facility. I am confident that in an
+intentional production environment we could get 100% of those geocoded.
+
+There may also be some facilities licensed as Home Health Care that also
+serve as a hospice.
+
+
