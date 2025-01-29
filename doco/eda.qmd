@@ -22,7 +22,7 @@ credential_types <-
 
 ## 
 licenced_facilities <- 
-  RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=100")
+  RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=10")
 
 ```
 
