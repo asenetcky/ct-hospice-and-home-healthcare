@@ -1,6 +1,7 @@
 ---
 title: "Quick EDA"
 author: "Alexander Senetcky"
+
 format: 
   html:
     embed-resources: true
@@ -19,6 +20,7 @@ library(glue)
 
 ```{r data}
 ## credential types based on credential code
+
 credential_types <-
   RSocrata::read.socrata("https://data.ct.gov/resource/rykc-pttg.json")
 
@@ -256,3 +258,4 @@ mapview::mapview(
 looks good enough to me.
 
 Not many "active" hospice -I think we have 2 and only 1 geocoded...
+

@@ -43,5 +43,3 @@ c(
   purrr::walk(
     \(pkg) renv::install(pkg, dependencies = TRUE)
   )
-
-renv::snapshot()
