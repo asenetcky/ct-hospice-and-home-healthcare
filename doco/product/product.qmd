@@ -25,6 +25,8 @@ format:
         href: https://data.ct.gov/Business/Credential-Types/rykc-pttg/about_data
       - text: Census Geocoder
         href: https://geocoding.geo.census.gov/geocoder/
+      - text: Census TIGER/Line Shapefiles
+        href: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
 date: "2025-01-29"
 ---
 
@@ -50,14 +52,18 @@ intentional production environment we could get 100% of those geocoded.
 There may also be some facilities licensed as Home Health Care that also
 serve as a hospice.
 
-TODO: reference to table
-TODO: reference to map
+For a list of active and inactive facilities, please see @fig-facility-table.
+
+Please reference @fig-facility-map to see the geocoded results displayed on
+a map.
+
 
 
 ```{r}
 #| label: "setup"
 #| include: false
 
+# Libraries
 library(dplyr)
 library(lubridate)
 library(tigris)
@@ -71,6 +77,9 @@ library(sf)
 library(DT)
 library(readr)
 library(fs)
+
+#options
+options(tigris_use_cache = TRUE)
 
 ```
 
@@ -227,8 +236,32 @@ geocoded_facilities <-
   )
 ```
 
+Shapefiles will also be needed as well. County Subdivision Shapefiles for
+Connecticut will be grabbed from the
+[Census TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html).
+
+```{r}
+#| label: shapefiles-town
+#| message: false
+#| warning: false
+
+town_shapefile <- 
+  tigris::county_subdivisions(
+    state = "09",
+    cb = TRUE,
+    year = 2022,
+    progress_bar = FALSE
+  )
+
+```
+
 
 ## Table
+
+Below is table meant for a quick reference to the data.  Please 
+see the provided .csv file for deeper analysis: `hospice_hhc_Facility_list.csv`
+
+### Facility Info
 
 ```{r}
 #| label: fig-facility-table
@@ -239,17 +272,23 @@ facilities |>
     credential = factor(credential),
     full_address = str_to_lower(full_address)
   ) |> 
-  select(-c(type, credentialnumber, recordrefreshedon)) |> 
+  select(
+    -c(
+      type, 
+      fullcredentialcode, 
+      credentialnumber, 
+      effectivedate,
+      recordrefreshedon
+    )
+  ) |> 
   DT::datatable(
     filter = "top",
     rownames = FALSE,
     colnames = c(
       "Name",
-      "Credential Code",
       "Credential Type",
       "Status",
       "Issue Date",
-      "Effective Date",
       "Expiration Date",
       "Address"
     ),
@@ -262,3 +301,44 @@ facilities |>
 
 
 ## Map
+
+### Active Connecticut Home Healthcare and Hospice Facilities
+
+```{r}
+#| label: fig-facility-map
+
+map_data <- 
+  geocoded_facilities |> 
+     select(
+      name,
+      type,
+      credential,
+      credentialnumber,
+      full_address,
+      status,
+      issuedate:expirationdate,
+      geometry
+    ) 
+
+mapview::mapview(
+  town_shapefile,
+  layer.name = "Town",
+  alpha = 0.9,
+  alpha.regions = 0.15,
+  col.regions = "#3371E7",
+  label = "NAME"
+  #zcol = "NAME",
+  #legend = TRUE,
+  #burst = TRUE
+) +
+mapview::mapview(
+  map_data,
+  layer.name = "Facilities",
+  # ycol = "lat",
+  # xcol = "long",
+  label = "name",
+  zcol = "credential"
+) 
+  
+```
+
