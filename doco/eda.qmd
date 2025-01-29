@@ -51,7 +51,7 @@ where_clause <-
 where_and <- "and credentialtype in('HHC', 'HSPC')"
 
 target_data <- 
-  RSocrata::read.socrata(url = glue::glue(resource_url, where_clause, where_and)) |> 
+  RSocrata::read.socrata(url = glue(resource_url, where_clause, where_and)) |> 
   dplyr::as_tibble()
 
 ```
@@ -75,7 +75,7 @@ lets try filtering on the active and facility types.
 new_where_clause <- "?$where=active = 1 " 
 new_target_data <- 
   RSocrata::read.socrata(
-    glue::glue(resource_url, new_where_clause, where_and)
+    glue(resource_url, new_where_clause, where_and)
   ) |> 
   dplyr::as_tibble()
 
@@ -124,11 +124,13 @@ active_hspc_hhc <-
     zip = str_sub(zip, end = -5L),
     across(
       c(name, type, status), str_to_title
-    )
+    ),
+    ID = row_number()
   ) |> 
   dplyr::relocate(
-    recordrefreshedon, .after = zip_plus_four
-  )
+    recordrefreshedon, .after = last_col()
+  ) |> 
+  dplyr::relocate(ID)
   
 active_hspc_hhc
 ```
@@ -136,3 +138,49 @@ active_hspc_hhc
 ## Mapping
 
 Next up we'll try geocoding and mapping.
+
+```{r}
+
+addresses <- 
+  active_hspc_hhc |> 
+  select(ID, address, city, state, zip) |> 
+  mutate(
+    zip = if_else(zip == 0, NA_character_, zip),
+    full_address = glue(
+      "{address}, {city}, {state}"
+    ),
+    full_address = if_else(
+      !is.na(zip),
+      glue("{full_address} {zip}"),
+      full_address
+    )
+  )
+
+ addresses
+```
+
+### Geocode
+
+Going to run these through the census geocoder api.
+
+```{r}
+geocoded <- 
+  addresses |> 
+  tidygeocoder::geocode(
+    address = full_address, method = "census"
+  )
+
+glimpse(geocoded)
+
+```
+
+So we have a few that couldn't be geocoded. How many failed?
+
+```{r}
+geocoded |> filter(is.na(lat)) |> nrow()
+```
+
+Seven isn't terrible but we can do better.  Let's move on to plotting
+and mapping and then we can come back and refine.
+
+
