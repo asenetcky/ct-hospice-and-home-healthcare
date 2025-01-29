@@ -95,9 +95,39 @@ target_data |>
 
 We likely only need the active then.
 
-Let's tidy these data up.
+Let's tidy these data up and make them map/presentation ready
 
 ```{r}
 
+active_hspc_hhc <- 
+  new_target_data |> 
+  select(
+    name,
+    type,
+    fullcredentialcode,
+    credentialnumber,
+    credential,
+    status,
+    issuedate,
+    effectivedate,
+    expirationdate,
+    address,
+    city,
+    state,
+    zip,
+    recordrefreshedon
+  ) |> 
+  mutate(
+    zip_plus_four = str_sub(zip, start = -4L),
+    zip = str_sub(zip, end = -5L),
+    across(
+      c(name, type, status), str_to_title
+    )
+  ) |> 
+  dplyr::relocate(
+    recordrefreshedon, .after = zip_plus_four
+  )
+  
+active_hspc_hhc
 ```
 
