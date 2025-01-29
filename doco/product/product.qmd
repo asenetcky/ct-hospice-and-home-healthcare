@@ -23,6 +23,8 @@ format:
         href: https://data.ct.gov/Business/State-Licenses-and-Credentials/ngch-56tr/about_data
       - text: Facility Credential Types
         href: https://data.ct.gov/Business/Credential-Types/rykc-pttg/about_data
+      - text: Census Geocoder
+        href: https://geocoding.geo.census.gov/geocoder/
 date: "2025-01-29"
 ---
 
@@ -66,7 +68,9 @@ library(tigris)
 library(mapview)
 library(tidygeocoder)
 library(sf)
-library(gt)
+library(DT)
+library(readr)
+library(fs)
 
 ```
 
@@ -189,9 +193,72 @@ facilities <-
   ) |> 
   arrange(status, credential, name)
 
+# write out as .csv
+# write_csv(
+#   facilities,
+#   file = fs::path_wd("data/hospice_hhc_facility_list.csv")
+#   na = ""
+# )
+
+```
+
+Then these data are run through the [Census Geocoder](https://geocoding.geo.census.gov/geocoder/).
+
+```{r}
+#| label: geocode-data
+#| message: false
+
+# geocode with census geocoder
+# then drop rows not geocoded
+geocoded_facilities <- 
+  facilities |> 
+  filter(status != "Closed") |> 
+  tidygeocoder::geocode(
+     address = full_address, method = "census"
+  ) |> 
+  filter(!is.na(long))
+
+# convert to sf
+geocoded_facilities <- 
+  sf::st_as_sf(
+    geocoded_facilities,
+    coords = c("long", "lat"),
+    crs = "NAD83"
+  )
 ```
 
 
 ## Table
+
+```{r}
+#| label: fig-facility-table
+
+facilities |> 
+  mutate(
+    status = factor(status),
+    credential = factor(credential),
+    full_address = str_to_lower(full_address)
+  ) |> 
+  select(-c(type, credentialnumber, recordrefreshedon)) |> 
+  DT::datatable(
+    filter = "top",
+    rownames = FALSE,
+    colnames = c(
+      "Name",
+      "Credential Code",
+      "Credential Type",
+      "Status",
+      "Issue Date",
+      "Effective Date",
+      "Expiration Date",
+      "Address"
+    ),
+    options = list(
+      pageLength = 5,
+      autoWidth = TRUE
+    )
+  )
+```
+
 
 ## Map
