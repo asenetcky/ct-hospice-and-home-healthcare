@@ -12,6 +12,7 @@ author:
         url: https://portal.ct.gov/dph
 format: 
   html:
+    code-fold: true
     embed-resources: true
     toc: true
     toc-location: left
@@ -47,4 +48,50 @@ intentional production environment we could get 100% of those geocoded.
 There may also be some facilities licensed as Home Health Care that also
 serve as a hospice.
 
+
+
+```{r}
+#| label: "setup"
+#| include: false
+
+library(dplyr)
+library(lubridate)
+library(tigris)
+library(RSocrata)
+library(stringr)
+library(glue)
+library(tigris)
+library(mapview)
+library(tidygeocoder)
+library(sf)
+library(gt)
+
+```
+
+## Facilities
+
+```{r}
+#| label: "grab-data"
+
+# splitting this out in case iteration is needed
+
+domain <- "https://data.ct.gov/"
+resource <- "/resource/ngch-56tr.json"
+where_clause <- "?$where="
+expiration_clause <- "expirationdate >= '2025-01-28'"
+active_clause <- "active = 1"
+credential_type_clause <- "credentialtype in('HHC', 'HSPC')"
+
+# grab all facilities that haven't expired as of 2025-01-28
+include_non_active <- glue(
+  "{domain}{resource}{where_clause}{expiration_clause} and {credential_type_clause}"
+)
+
+# grab all active facilities
+only_active <-  glue(
+  "{domain}{resource}{where_clause}{active_clause} and {credential_type_clause}"
+)
+
+
+```
 
