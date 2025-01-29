@@ -37,5 +37,7 @@ c(
   "mapview"
 ) |>
   purrr::walk(
-    \(pkg) renv::install(pkg, prompt = FALSE, lock = TRUE, dependencies = TRUE)
+    \(pkg) renv::install(pkg, dependencies = TRUE)
   )
+
+renv::snapshot()
