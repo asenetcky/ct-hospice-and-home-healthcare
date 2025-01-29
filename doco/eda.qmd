@@ -17,13 +17,12 @@ library(glue)
 
 ```{r data}
 ## credential types based on credential code
-credential_types <- 
+credential_types <-
   RSocrata::read.socrata("https://data.ct.gov/resource/rykc-pttg.json")
 
-## 
-licenced_facilities <- 
+##
+licenced_facilities <-
   RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=10")
-
 ```
 
 ### Taking a Peek
@@ -31,12 +30,11 @@ licenced_facilities <-
 ```{r}
 dplyr::glimpse(credential_types)
 dplyr::glimpse(licenced_facilities)
-
 ```
 
 ```{r}
-credential_types |> 
-  mutate(across(everything(), str_to_lower)) |> 
+credential_types |>
+  mutate(across(everything(), str_to_lower)) |>
   filter(credential %in% c("hospice", "home health care"))
 ```
 
@@ -46,14 +44,13 @@ Let's try and grab license data that is from 2024 onward.
 
 ```{r}
 resource_url <- "https://data.ct.gov/resource/ngch-56tr.json"
-where_clause <- 
+where_clause <-
   "?$where=expirationdate >= '2025-01-28' "
 where_and <- "and credentialtype in('HHC', 'HSPC')"
 
-target_data <- 
-  RSocrata::read.socrata(url = glue(resource_url, where_clause, where_and)) |> 
+target_data <-
+  RSocrata::read.socrata(url = glue(resource_url, where_clause, where_and)) |>
   dplyr::as_tibble()
-
 ```
 
 Looks like we nabbed some rows. Let's see what we got.
@@ -71,25 +68,22 @@ all the rows I'm looking for more easily.
 lets try filtering on the active and facility types.
 
 ```{r}
-
-new_where_clause <- "?$where=active = 1 " 
-new_target_data <- 
+new_where_clause <- "?$where=active = 1 "
+new_target_data <-
   RSocrata::read.socrata(
     glue(resource_url, new_where_clause, where_and)
-  ) |> 
+  ) |>
   dplyr::as_tibble()
 
 glimpse(new_target_data)
-  
 ```
 
 looks to be some differences...
 
 ```{r}
-
 target_data |> count(active)
 
-target_data |> 
+target_data |>
   filter(active == "0")
 ```
 
@@ -100,9 +94,8 @@ We likely only need the active then.
 This looks good let's tidy these data up and make them map/presentation ready
 
 ```{r}
-
-active_hspc_hhc <- 
-  new_target_data |> 
+active_hspc_hhc <-
+  new_target_data |>
   select(
     name,
     type,
@@ -118,7 +111,7 @@ active_hspc_hhc <-
     state,
     zip,
     recordrefreshedon
-  ) |> 
+  ) |>
   mutate(
     zip_plus_four = str_sub(zip, start = -4L),
     zip = str_sub(zip, end = -5L),
@@ -126,12 +119,13 @@ active_hspc_hhc <-
       c(name, type, status), str_to_title
     ),
     ID = row_number()
-  ) |> 
+  ) |>
   dplyr::relocate(
-    recordrefreshedon, .after = last_col()
-  ) |> 
+    recordrefreshedon,
+    .after = last_col()
+  ) |>
   dplyr::relocate(ID)
-  
+
 active_hspc_hhc
 ```
 
@@ -140,10 +134,9 @@ active_hspc_hhc
 Next up we'll try geocoding and mapping.
 
 ```{r}
-
-addresses <- 
-  active_hspc_hhc |> 
-  select(ID, address, city, state, zip) |> 
+addresses <-
+  active_hspc_hhc |>
+  select(ID, address, city, state, zip) |>
   mutate(
     zip = if_else(zip == 0, NA_character_, zip),
     full_address = glue(
@@ -156,7 +149,7 @@ addresses <-
     )
   )
 
- addresses
+addresses
 ```
 
 ### Geocode
@@ -164,20 +157,21 @@ addresses <-
 Going to run these through the census geocoder api.
 
 ```{r}
-geocoded <- 
-  addresses |> 
+geocoded <-
+  addresses |>
   tidygeocoder::geocode(
     address = full_address, method = "census"
   )
 
 glimpse(geocoded)
-
 ```
 
 So we have a few that couldn't be geocoded. How many failed?
 
 ```{r}
-geocoded |> filter(is.na(lat)) |> nrow()
+geocoded |>
+  filter(is.na(lat)) |>
+  nrow()
 ```
 
 Seven isn't terrible but we can do better.  Let's move on to plotting
