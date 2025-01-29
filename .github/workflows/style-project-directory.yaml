@@ -31,6 +31,7 @@ jobs:
         with:
           profile: '"gha"'
           cache-version: 1
+          working-directory: "renv/profiles/gha"
 
       - name: Enable styler cache
         run: styler::cache_activate()
