@@ -37,7 +37,8 @@ c(
   "mapview",
   "stringr",
   "tigris",
-  "glue"
+  "glue",
+  "lubridate"
 ) |>
   purrr::walk(
     \(pkg) renv::install(pkg, dependencies = TRUE)
