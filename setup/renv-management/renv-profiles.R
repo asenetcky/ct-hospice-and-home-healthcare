@@ -2,7 +2,7 @@
 
 ## gha profile -  initially for styler
 renv::activate(profile = "gha")
-renv::install("styler")
+renv::install("styler", dependencies = TRUE, prompt = FALSE)
 styler::style_dir()
 renv::snapshot()
 
@@ -34,8 +34,12 @@ c(
   "tidygeocoder",
   "sf",
   "leaflet",
-  "mapview"
+  "mapview",
+  "stringr",
+  "tigris",
+  "glue",
+  "lubridate"
 ) |>
   purrr::walk(
-    \(pkg) renv::install(pkg, prompt = FALSE, lock = TRUE, dependencies = TRUE)
+    \(pkg) renv::install(pkg, dependencies = TRUE)
   )

@@ -1,7 +1,10 @@
 ---
 title: "Quick EDA"
 author: "Alexander Senetcky"
-format: html
+
+format: 
+  html:
+    embed-resources: true
 ---
 
 ## Small Slice of Data
@@ -11,17 +14,19 @@ Start off by grabbing small chunks of the data
 ```{r setup}
 library(RSocrata)
 library(dplyr)
+library(stringr)
+library(glue)
 ```
 
 ```{r data}
 ## credential types based on credential code
-credential_types <- 
+
+credential_types <-
   RSocrata::read.socrata("https://data.ct.gov/resource/rykc-pttg.json")
 
-## 
-licenced_facilities <- 
-  RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=100")
-
+##
+licenced_facilities <-
+  RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$limit=10")
 ```
 
 ### Taking a Peek
@@ -29,16 +34,228 @@ licenced_facilities <-
 ```{r}
 dplyr::glimpse(credential_types)
 dplyr::glimpse(licenced_facilities)
-
 ```
 
+```{r}
+credential_types |>
+  mutate(across(everything(), str_to_lower)) |>
+  filter(credential %in% c("hospice", "home health care"))
+```
+
+
+It looks like Hospice is "HSPC" and "HHC"
 Let's try and grab license data that is from 2024 onward.
 
 ```{r}
-###| eval: false
-###| include: false
-newish_licensed_facilities <- 
-   RSocrata::read.socrata("https://data.ct.gov/resource/ngch-56tr.json?$where=expirationdate >= '2025-01-28'")
+resource_url <- "https://data.ct.gov/resource/ngch-56tr.json"
+where_clause <-
+  "?$where=expirationdate >= '2025-01-28' "
+where_and <- "and credentialtype in('HHC', 'HSPC')"
+
+target_data <-
+  RSocrata::read.socrata(url = glue(resource_url, where_clause, where_and)) |>
+  dplyr::as_tibble()
 ```
 
-holy cow this is taking forever.
+Looks like we nabbed some rows. Let's see what we got.
+
+```{r}
+glimpse(target_data)
+```
+
+There's no metadata attached to any of the columns but I'm starting to get
+a better grasp of the data looking at more current data. `status`, 
+`statusreason`, and `active` look like other variables I can leverage to find
+all the rows I'm looking for more easily.
+
+
+lets try filtering on the active and facility types.
+
+```{r}
+new_where_clause <- "?$where=active = 1 "
+new_target_data <-
+  RSocrata::read.socrata(
+    glue(resource_url, new_where_clause, where_and)
+  ) |>
+  dplyr::as_tibble()
+
+glimpse(new_target_data)
+```
+
+looks to be some differences...
+
+```{r}
+target_data |> count(active)
+
+target_data |>
+  filter(active == "0")
+```
+
+We likely only need the active then.
+
+## Tidying Up
+
+This looks good let's tidy these data up and make them map/presentation ready
+
+```{r}
+active_hspc_hhc <-
+  new_target_data |>
+  select(
+    name,
+    type,
+    fullcredentialcode,
+    credentialnumber,
+    credential,
+    status,
+    issuedate,
+    effectivedate,
+    expirationdate,
+    address,
+    city,
+    state,
+    zip,
+    recordrefreshedon
+  ) |>
+  mutate(
+    across(
+      where(lubridate::is.timepoint),
+      lubridate::as_date
+    ),
+    zip_plus_four = str_sub(zip, start = -4L),
+    zip = str_sub(zip, end = -5L),
+    across(
+      c(name, type, status), str_to_title
+    ),
+    ID = row_number()
+  ) |>
+  dplyr::relocate(
+    recordrefreshedon,
+    .after = last_col()
+  ) |>
+  dplyr::relocate(ID)
+
+active_hspc_hhc
+```
+
+## Mapping
+
+Next up we'll try geocoding and mapping.
+
+```{r}
+addresses <-
+  active_hspc_hhc |>
+  mutate(
+    zip = if_else(zip == 0, NA_character_, zip),
+    full_address = glue(
+      "{address}, {city}, {state}"
+    ),
+    full_address = if_else(
+      !is.na(zip),
+      glue("{full_address} {zip}"),
+      full_address
+    )
+  )
+
+addresses |> 
+  select(ID, full_address)
+```
+
+### Geocode
+
+Going to run these through the census geocoder api.
+
+```{r}
+geocoded <-
+  addresses |>
+  tidygeocoder::geocode(
+    address = full_address, method = "census"
+  )
+
+glimpse(geocoded)
+```
+
+So we have a few that couldn't be geocoded. How many failed?
+
+```{r}
+geocoded |>
+  filter(is.na(lat)) |>
+  nrow()
+```
+
+Seven isn't terrible but we can do better.  Let's move on to plotting
+and mapping and then we can come back and refine.
+
+
+### Shapefiles
+
+Let's grab some shapefiles!
+
+```{r}
+options(tigris_use_cache = TRUE)
+
+town_shapefile <- 
+  tigris::county_subdivisions(
+    state = "09",
+    cb = TRUE,
+    year = 2022,
+    progress_bar = FALSE
+  )
+
+```
+
+
+### Mapview
+
+```{r}
+
+map_facilities <- 
+  geocoded |> 
+  filter(!is.na(long)) |> 
+  select(
+    name,
+    type,
+    credential,
+    credentialnumber,
+    full_address,
+    status,
+    issuedate:expirationdate,
+    lat,
+    long
+  )
+
+map_facilities <- 
+  sf::st_as_sf(
+    map_facilities,
+    coords = c("long", "lat"),
+    crs = "epsg:4326"
+  )
+
+
+mapview::mapview(
+  town_shapefile,
+  layer.name = "Town",
+  alpha = 0.9,
+  alpha.regions = 0.15,
+  col.regions = "#3371E7",
+  label = "NAME"
+  #zcol = "NAME",
+  #legend = TRUE,
+  #burst = TRUE
+) +
+mapview::mapview(
+  map_facilities,
+  layer.name = "Facilities",
+  ycol = "lat",
+  xcol = "long",
+  label = "name",
+  zcol = "credential"
+) 
+
+
+
+```
+
+looks good enough to me.
+
+Not many "active" hospice -I think we have 2 and only 1 geocoded...
+
