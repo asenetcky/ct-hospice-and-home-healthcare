@@ -35,7 +35,7 @@ facilities in Connecticut using open data from the
 The State License and Credential dataset is large, unordered and updated daily.
 The ODP API backend was used to pull down all active Home Health Care and
 Hospice facilities and ignore the other million or so rows. There appear to be
-93 faciliities in the lastest parts of the data, with 90 being "Active" or
+93 facilities in the lastest parts of the data, with 90 being "Active" or
 "Active in renewal".  Of those active 90, only 2 were credentialed as hospice
 facilities.
 
@@ -48,6 +48,8 @@ intentional production environment we could get 100% of those geocoded.
 There may also be some facilities licensed as Home Health Care that also
 serve as a hospice.
 
+TODO: reference to table
+TODO: reference to map
 
 
 ```{r}
@@ -68,30 +70,128 @@ library(gt)
 
 ```
 
-## Facilities
+## The Process
+
+### API Data Request
+
+First the data is pulled from the API on the ODP.  Only facilities
+that are credentialed as "HSSPC" and "HHC" are included. To get at
+anything that isn't too old but may not be active, the `expirationdate` 
+variable is used and any facility that hasn't expired as of 2025-01-28
+is included. 
+
+::: {.callout-note}
+Note that these is *no* metadata about the contents of the credential data
+provided. So the use of `expirationdate` was a best guess.  If a wider net
+needs to be cast, other combinations of variables and values can be 
+used.
+:::
 
 ```{r}
 #| label: "grab-data"
 
 # splitting this out in case iteration is needed
-
 domain <- "https://data.ct.gov/"
-resource <- "/resource/ngch-56tr.json"
+resource <- "resource/ngch-56tr.json"
 where_clause <- "?$where="
 expiration_clause <- "expirationdate >= '2025-01-28'"
 active_clause <- "active = 1"
 credential_type_clause <- "credentialtype in('HHC', 'HSPC')"
 
 # grab all facilities that haven't expired as of 2025-01-28
-include_non_active <- glue(
+include_non_active_statement <- glue(
   "{domain}{resource}{where_clause}{expiration_clause} and {credential_type_clause}"
 )
 
 # grab all active facilities
-only_active <-  glue(
+only_active_statement <-  glue(
   "{domain}{resource}{where_clause}{active_clause} and {credential_type_clause}"
 )
 
+include_non_active <- 
+  RSocrata::read.socrata(url = include_non_active_statement) |> 
+  as_tibble()
+
+only_active <- 
+  RSocrata::read.socrata(only_active_statement) |> 
+  as_tibble()
+```
+
+The raw data look like this:
+
+```{r}
+glimpse(include_non_active)
+```
+
+
+### Clean and Geocode
+
+Next up the data are cleaned and the relevant elements are kept.
+
+```{r}
+#| label: clean-data
+
+# At the time of writing the two datasets are the same - minus the 3 non-active
+# facilities, so let's use that as our data layer
+
+facilities <- 
+  include_non_active |> 
+  select(
+    name,
+    type,
+    fullcredentialcode,
+    credentialnumber,
+    credential,
+    status,
+    issuedate,
+    effectivedate,
+    expirationdate,
+    address,
+    city,
+    state,
+    zip,
+    recordrefreshedon
+  ) |>
+  mutate(
+    across(
+      where(lubridate::is.timepoint),
+      lubridate::as_date
+    ),
+    zip = str_sub(zip, end = -5L),
+    across(
+      c(name, type, status), str_to_title
+    ),
+    zip = if_else(zip == 0, NA_character_, zip),
+    full_address = glue(
+      "{address}, {city}, {state}"
+    ),
+    full_address = if_else(
+      !is.na(zip),
+      glue("{full_address} {zip}"),
+      full_address
+    )
+  ) |>
+  select(
+    -c(
+      address,
+      city,
+      state,
+      zip
+    )
+  ) |> 
+  dplyr::relocate(
+    full_address,
+    .after = expirationdate
+  ) |> 
+  dplyr::relocate(
+    recordrefreshedon,
+    .after = last_col()
+  ) |> 
+  arrange(status, credential, name)
 
 ```
 
+
+## Table
+
+## Map
