@@ -56,7 +56,7 @@ target_data <-
 
 ```
 
-Looks like we nabbed some rows. LEt's see what we got.
+Looks like we nabbed some rows. Let's see what we got.
 
 ```{r}
 glimpse(target_data)
@@ -95,7 +95,9 @@ target_data |>
 
 We likely only need the active then.
 
-Let's tidy these data up and make them map/presentation ready
+## Tidying Up
+
+This looks good let's tidy these data up and make them map/presentation ready
 
 ```{r}
 
@@ -131,3 +133,6 @@ active_hspc_hhc <-
 active_hspc_hhc
 ```
 
+## Mapping
+
+Next up we'll try geocoding and mapping.
